@@ -8,7 +8,6 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import ttk
-from typing import List, Optional, Tuple, Union
 
 import customtkinter as ctk
 
@@ -16,7 +15,7 @@ from src.scanner import DeviceResult, NetworkScanner
 
 logger = logging.getLogger(__name__)
 
-UiEvent = Tuple[str, Union[str, DeviceResult, List[DeviceResult], Exception, None]]
+UiEvent = tuple[str, str | DeviceResult | list[DeviceResult] | Exception | None]
 
 
 class App(ctk.CTk):
@@ -40,10 +39,10 @@ class App(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
 
         self._ui_queue: queue.Queue[UiEvent] = queue.Queue()
-        self._scan_thread: Optional[threading.Thread] = None
+        self._scan_thread: threading.Thread | None = None
         self._hosts_total: int = 0
         self._hosts_scanned: int = 0
-        self._scanner: Optional[NetworkScanner] = None
+        self._scanner: NetworkScanner | None = None
 
         self.sidebar: ctk.CTkFrame = self._build_sidebar()
         self.content: ctk.CTkFrame = self._build_content()
@@ -168,14 +167,12 @@ class App(ctk.CTk):
 
             appearance = ctk.get_appearance_mode()
             if appearance == "Dark":
-                background = "#2b2b2b"
                 foreground = "#dce4ee"
                 field_background = "#212121"
                 heading_background = "#1f538d"
                 selected_background = "#1f538d"
                 border_color = "#3a3a3a"
             else:
-                background = "#dbdbdb"
                 foreground = "#1a1a1a"
                 field_background = "#f0f0f0"
                 heading_background = "#3b8ed0"
@@ -184,9 +181,6 @@ class App(ctk.CTk):
 
             # Prefer live CustomTkinter theme colors when available.
             try:
-                background = self._apply_appearance_mode(
-                    ctk.ThemeManager.theme["CTkFrame"]["fg_color"]
-                )
                 foreground = self._apply_appearance_mode(
                     ctk.ThemeManager.theme["CTkLabel"]["text_color"]
                 )
@@ -257,8 +251,8 @@ class App(ctk.CTk):
         try:
             network = ipaddress.ip_network(subnet, strict=False)
             if not isinstance(network, ipaddress.IPv4Network):
-                raise ValueError("Only IPv4 subnets are supported")
-        except ValueError:
+                raise TypeError("Only IPv4 subnets are supported")
+        except (ValueError, TypeError):
             logger.exception("Invalid subnet entered: %s", subnet)
             self.status_label.configure(text=f"Invalid subnet: {subnet}")
             return
@@ -307,7 +301,7 @@ class App(ctk.CTk):
     def _enqueue_result(self, result: DeviceResult) -> None:
         self._ui_queue.put(("result", result))
 
-    def _enqueue_complete(self, results: List[DeviceResult]) -> None:
+    def _enqueue_complete(self, results: list[DeviceResult]) -> None:
         self._ui_queue.put(("complete", results))
 
     def _process_ui_queue(self) -> None:
@@ -320,7 +314,8 @@ class App(ctk.CTk):
                 elif event_type == "result" and isinstance(payload, DeviceResult):
                     self._handle_result(payload)
                 elif event_type == "complete" and isinstance(payload, list):
-                    self._handle_complete(payload)
+                    devices = [item for item in payload if isinstance(item, DeviceResult)]
+                    self._handle_complete(devices)
                 elif event_type == "error":
                     self._handle_error(payload)
                 else:
@@ -350,7 +345,7 @@ class App(ctk.CTk):
             values=(result.ip, hostname, status),
         )
 
-    def _handle_complete(self, results: List[DeviceResult]) -> None:
+    def _handle_complete(self, results: list[DeviceResult]) -> None:
         self.progress_bar.set(1.0)
         self.status_label.configure(
             text=f"Scan complete: {len(results)} active device(s) found"
@@ -369,7 +364,7 @@ class App(ctk.CTk):
         self.subnet_entry.configure(state=state)
 
 
-def run(app: Optional[App] = None) -> None:
+def run(app: App | None = None) -> None:
     """Create the application window and start the event loop."""
     try:
         window = app if app is not None else App()

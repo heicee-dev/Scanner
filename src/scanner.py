@@ -10,14 +10,14 @@ import re
 import socket
 import subprocess
 import threading
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str], None]
 ResultCallback = Callable[["DeviceResult"], None]
-CompleteCallback = Callable[[List["DeviceResult"]], None]
+CompleteCallback = Callable[[list["DeviceResult"]], None]
 
 
 @dataclass(frozen=True)
@@ -25,9 +25,9 @@ class DeviceResult:
     """A single host discovered (or probed) during a network scan."""
 
     ip: str
-    hostname: Optional[str]
+    hostname: str | None
     is_alive: bool
-    response_time_ms: Optional[float] = None
+    response_time_ms: float | None = None
 
 
 @dataclass(frozen=True)
@@ -47,9 +47,9 @@ class NetworkScanner:
         *,
         timeout_ms: int = 1000,
         max_workers: int = 64,
-        on_progress: Optional[ProgressCallback] = None,
-        on_result: Optional[ResultCallback] = None,
-        on_complete: Optional[CompleteCallback] = None,
+        on_progress: ProgressCallback | None = None,
+        on_result: ResultCallback | None = None,
+        on_complete: CompleteCallback | None = None,
     ) -> None:
         self.timeout_ms = timeout_ms
         self.max_workers = max_workers
@@ -126,7 +126,7 @@ class NetworkScanner:
         """Return a CIDR subnet suitable as the default scanning range."""
         return self.get_local_network_info().network
 
-    def discover(self, subnet: str) -> List[DeviceResult]:
+    def discover(self, subnet: str) -> list[DeviceResult]:
         """
         Discover active devices on ``subnet`` (e.g. ``'192.168.1.0/24'``).
 
@@ -139,7 +139,7 @@ class NetworkScanner:
             self._is_scanning = True
             self._cancel_event.clear()
 
-        alive_results: List[DeviceResult] = []
+        alive_results: list[DeviceResult] = []
 
         try:
             hosts = self._hosts_from_subnet(subnet)
@@ -197,7 +197,7 @@ class NetworkScanner:
             raise ValueError(f"Invalid subnet: {subnet}") from None
 
         if not isinstance(network, ipaddress.IPv4Network):
-            raise ValueError(f"Only IPv4 subnets are supported: {subnet}")
+            raise TypeError(f"Only IPv4 subnets are supported: {subnet}")
 
         hosts = list(network.hosts())
         if not hosts:
@@ -205,7 +205,7 @@ class NetworkScanner:
             hosts = [network.network_address]
         return hosts
 
-    def _probe_host(self, ip: str) -> Optional[DeviceResult]:
+    def _probe_host(self, ip: str) -> DeviceResult | None:
         if self._cancel_event.is_set():
             return None
 
@@ -228,7 +228,7 @@ class NetworkScanner:
             response_time_ms=response_time_ms,
         )
 
-    def _ping(self, ip: str) -> Tuple[bool, Optional[float]]:
+    def _ping(self, ip: str) -> tuple[bool, float | None]:
         system = platform.system().lower()
         if system == "windows":
             command = [
@@ -241,7 +241,7 @@ class NetworkScanner:
             ]
         else:
             # Linux/macOS: -c count, -W timeout in seconds.
-            timeout_seconds = max(1, int(round(self.timeout_ms / 1000)))
+            timeout_seconds = max(1, round(self.timeout_ms / 1000))
             command = ["ping", "-c", "1", "-W", str(timeout_seconds), ip]
 
         try:
@@ -262,7 +262,7 @@ class NetworkScanner:
         response_time_ms = self._parse_ping_time_ms(completed.stdout)
         return True, response_time_ms
 
-    def _parse_ping_time_ms(self, output: str) -> Optional[float]:
+    def _parse_ping_time_ms(self, output: str) -> float | None:
         match = re.search(
             r"(?:time[=<]|time=)(\d+(?:\.\d+)?)\s*ms",
             output,
@@ -276,7 +276,7 @@ class NetworkScanner:
             logger.warning("Unable to parse ping latency from output: %s", match.group(0))
             return None
 
-    def _resolve_hostname(self, ip: str) -> Optional[str]:
+    def _resolve_hostname(self, ip: str) -> str | None:
         try:
             hostname, _aliases, _addresses = socket.gethostbyaddr(ip)
             return hostname
@@ -309,7 +309,7 @@ class NetworkScanner:
         )
         return "255.255.255.0"
 
-    def _run_text_command(self, command: Sequence[str]) -> Optional[str]:
+    def _run_text_command(self, command: Sequence[str]) -> str | None:
         try:
             completed = subprocess.run(
                 list(command),
@@ -322,11 +322,15 @@ class NetworkScanner:
             logger.debug("Command not found while probing network: %s", command[0])
             return None
         except (subprocess.TimeoutExpired, OSError):
-            logger.warning("Failed to run command while probing network: %s", command[0], exc_info=True)
+            logger.warning(
+                "Failed to run command while probing network: %s",
+                command[0],
+                exc_info=True,
+            )
             return None
         return completed.stdout
 
-    def _netmask_from_ipconfig(self, local_ip: str) -> Optional[str]:
+    def _netmask_from_ipconfig(self, local_ip: str) -> str | None:
         output = self._run_text_command(["ipconfig"])
         if not output:
             return None
@@ -344,7 +348,7 @@ class NetworkScanner:
                 return match.group(1)
         return None
 
-    def _netmask_from_ip_command(self, local_ip: str) -> Optional[str]:
+    def _netmask_from_ip_command(self, local_ip: str) -> str | None:
         output = self._run_text_command(["ip", "-4", "-o", "addr", "show"])
         if not output:
             return None
@@ -362,7 +366,7 @@ class NetworkScanner:
                 return None
         return None
 
-    def _netmask_from_ifconfig(self, local_ip: str) -> Optional[str]:
+    def _netmask_from_ifconfig(self, local_ip: str) -> str | None:
         output = self._run_text_command(["ifconfig"])
         if not output:
             return None
@@ -403,7 +407,7 @@ class NetworkScanner:
         except Exception:
             logger.exception("Result callback raised unexpectedly for %s", result.ip)
 
-    def _emit_complete(self, results: List[DeviceResult]) -> None:
+    def _emit_complete(self, results: list[DeviceResult]) -> None:
         if self.on_complete is None:
             return
         try:

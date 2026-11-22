@@ -1,0 +1,35 @@
+# Scanner Project Rules
+
+## Language
+- Use Python 3.11+.
+- Prefer modern Python features available in 3.11+ (e.g. `|` union types, `match`/`case` when appropriate).
+
+## UI Framework
+- Build the desktop UI with CustomTkinter.
+- Keep widget construction and layout concerns in the UI layer.
+
+## Architecture
+- Follow a modular structure that separates:
+  - **Views** (`views/`): UI layout, widgets, and presentation.
+  - **Controllers** (`controllers/`): business logic and orchestration between views and models.
+  - **Models** (`models/`): data structures, persistence, and domain state.
+- Avoid mixing UI code with business logic or data access.
+- Prefer small, focused modules over large monolithic files.
+
+## Typing
+- Enforce strict type hinting on all functions and methods.
+- Import typing helpers from `typing` when needed (`from typing import ...`).
+- Annotate parameters and return types; use `None` for procedures with no return value.
+- Prefer precise types over `Any` unless there is a clear justification.
+
+## Error Handling
+- Use explicit `try`/`except` blocks around fallible operations.
+- Catch specific exception types when possible; avoid bare `except:`.
+- Log failures with meaningful messages that include context (what failed and why it matters).
+- Do not silently swallow exceptions.
+
+## Git Workflow
+- When asked to commit code, write clear, conventional commit messages
+  (e.g. `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`).
+- Keep commits focused on a single logical change.
+- Prefer imperative, concise subjects that describe the intent of the change.

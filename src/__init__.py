@@ -1,0 +1,1 @@
+"""Scanner desktop application package."""
